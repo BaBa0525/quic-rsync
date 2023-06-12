@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -25,7 +26,6 @@ func main() {
 	parts := strings.SplitN(args[2], "@", 2)
 	host, dstFilePath := parts[0], parts[1]
 	fmt.Println(host, dstFilePath)
-	log.Println("clean dstFilePath:", filepath.Clean(dstFilePath))
 
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: true,
@@ -64,7 +64,7 @@ func main() {
 
 	chksumMap := make(map[string]string)
 	for _, info := range dstFileInfo.Files {
-		chksumMap[filepath.Join(srcFilePath, info.Path)] = info.CheckSum
+		chksumMap[info.Path] = info.CheckSum
 		fmt.Println(info.Path, info.CheckSum)
 	}
 
@@ -93,32 +93,65 @@ func main() {
 		localPath := filepath.Join(srcFilePath, file)
 		remotePath := filepath.Join(dstFilePath, file)
 
-		dstChecksum, ok := chksumMap[localPath]
+		dstChecksum, ok := chksumMap[file]
 		if !ok {
-			newStream, err := conn.OpenStreamSync(context.Background())
-			internal.Unwrap(err)
 			wg.Add(1)
 			go func() {
+				stream, err := conn.OpenStreamSync(context.Background())
+				internal.Unwrap(err)
 				log.Println("in goroutine")
 				defer wg.Done()
-				sendFileContent(localPath, remotePath, newStream)
+				sendFileContent(localPath, remotePath, stream)
 			}()
 			log.Println("file not found in dst:", localPath)
 			continue
 		}
-		delete(chksumMap, localPath)
+		delete(chksumMap, file)
 
 		srcChecksum, err := internal.CheckSum(localPath)
 		internal.Unwrap(err)
 
 		if *srcChecksum != dstChecksum {
+			wg.Add(1)
+			go func() {
+				stream, err := conn.OpenStreamSync(context.Background())
+				internal.Unwrap(err)
+				log.Println("in goroutine")
+				defer wg.Done()
+				sendFileContent(localPath, remotePath, stream)
+			}()
 			log.Println("checksum not match:", localPath)
 		}
 	}
 
-	for path := range chksumMap {
-		log.Println("file not found in src:", path)
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		stream, err = conn.OpenStreamSync(context.Background())
+		internal.Unwrap(err)
+
+		deleteFiles := []string{}
+		for path := range chksumMap {
+			deleteFiles = append(deleteFiles, filepath.Join(dstFilePath, path))
+			log.Println("file not found in src:", path)
+		}
+
+		data, err := json.Marshal(deleteFiles)
+		internal.Unwrap(err)
+
+		header := internal.Header{
+			Type:   internal.DeleteFile,
+			Length: uint64(len(data)),
+		}
+
+		data = append(header.MarshalBinary(), data...)
+
+		_, err = stream.Write(data)
+		internal.Unwrap(err)
+
+		buffer := make([]byte, 1024)
+		stream.Read(buffer)
+	}()
 
 	wg.Wait()
 }

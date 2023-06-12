@@ -10,7 +10,7 @@ type PacketType uint32
 const (
 	SyncInfo PacketType = iota
 	FileContent
-	Delete
+	DeleteFile
 )
 
 type Header struct {

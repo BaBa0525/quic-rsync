@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
+	"encoding/json"
 	"encoding/pem"
 	"log"
 	"math/big"
@@ -61,14 +62,40 @@ func handleStream(stream quic.Stream) error {
 		return handleSyncRequest(stream, header.Length)
 	case internal.FileContent:
 		return handleFileContent(stream, header.Length)
+	case internal.DeleteFile:
+		return handleDeleteFile(stream, header.Length)
 	default:
 		return nil
 	}
 }
 
-func handleFileContent(stream quic.Stream, headerLength uint64) error {
-	log.Println("handleFileContent")
+func handleDeleteFile(stream quic.Stream, contentLength uint64) error {
 
+	buffer := make([]byte, contentLength)
+	nbytes, err := stream.Read(buffer)
+	if err != nil {
+		return err
+	}
+
+	deleteFiles := []string{}
+	err = json.Unmarshal(buffer[:nbytes], &deleteFiles)
+	if err != nil {
+		return err
+	}
+
+	for _, path := range deleteFiles {
+		log.Println("delete file: ", path)
+		err = os.Remove(path)
+		if err != nil {
+			return err
+		}
+	}
+
+	stream.Write([]byte("ok"))
+	return nil
+}
+
+func handleFileContent(stream quic.Stream, headerLength uint64) error {
 	receivedBytes := uint64(0)
 
 	buffer := make([]byte, headerLength)
@@ -81,6 +108,8 @@ func handleFileContent(stream quic.Stream, headerLength uint64) error {
 	path := string(buffer[8:nbytes])
 
 	log.Println("path: ", path)
+
+	os.MkdirAll(filepath.Dir(path), 0755)
 
 	f, err := os.Create(path)
 	if err != nil {
