@@ -1,6 +1,6 @@
 package internal
 
 const (
-	Addr     = ":8773"
+	Addr     = "localhost:4242"
 	TLSProto = "quic-rsync"
 )
