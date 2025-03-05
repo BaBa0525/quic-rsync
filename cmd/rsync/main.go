@@ -68,7 +68,7 @@ func main() {
 		fmt.Println(info.Path, info.CheckSum)
 	}
 
-	files := []string{}
+	srcFiles := []string{}
 	filepath.Walk(srcFilePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -82,14 +82,14 @@ func main() {
 		if info.IsDir() {
 			return nil
 		}
-		files = append(files, relativePath)
+		srcFiles = append(srcFiles, relativePath)
 
 		return nil
 	})
 
 	var wg sync.WaitGroup
 
-	for _, file := range files {
+	for _, file := range srcFiles {
 		localPath := filepath.Join(srcFilePath, file)
 		remotePath := filepath.Join(dstFilePath, file)
 
