@@ -51,6 +51,6 @@ go run ./cmd/rsync /path/to/source host:port@/path/to/destination
 
 5. Repeat the process for all the files in the source directory.
 
-## Slides (For my final project :))
+## Slides (For my final project :D)
 
 [Slides](https://www.canva.com/design/DAFlorTVR0U/EqRAEtoupxw5DsNhEJUd0A/edit?utm_content=DAFlorTVR0U&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
